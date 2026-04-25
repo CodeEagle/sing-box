@@ -1,48 +1,11 @@
 #!/usr/bin/env bash
-# sb-wrapper: drop-in replacement for the `sb` shortcut installed by
-# fscarmen's sing-box.sh. Calls upstream, then runs IPv6 dual-stack
-# post-processing.
+# Minimal sb shortcut: routes every `sb` invocation through the
+# CodeEagle/sing-box wrapper (which fetches upstream, patches it, runs
+# it, and applies IPv6 dual-stack post-processing).
 #
-# Behavior is selected by env vars (or persisted in /etc/sing-box/dualstack.env):
-#
-#   HOSTNAME_TARGET="vps.example.com"
-#       Use hostnameify mode — replaces literal IPv4 with the hostname in
-#       all subscribe outputs. Recommended when you own a dual-stack domain.
-#
-#   DUALSTACK_MIRROR=1
-#       Use dualstack-mirror mode — appends an IPv6 mirror entry per
-#       protocol. Use when no domain is available but VPS has v6.
-#
-# If neither is set, behaves identically to upstream (no post-processing).
+# This file is what install-dualstack.sh writes to /etc/sing-box/sb.sh.
+# The fork's sing-box.sh patches fscarmen's create_shortcut so that when
+# fscarmen regenerates this file, the URL still points back to the fork —
+# preserving the post-processing loop.
 
-WORK_DIR="${WORK_DIR:-/etc/sing-box}"
-ENV_FILE="$WORK_DIR/dualstack.env"
-
-# Load persisted env if present
-[ -f "$ENV_FILE" ] && set -a && . "$ENV_FILE" && set +a
-
-# Run fscarmen upstream
-bash <(wget --no-check-certificate -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-box.sh) "$@"
-RC=$?
-
-# Post-process based on env
-if [ -d "$WORK_DIR/subscribe" ]; then
-    if [ -n "$HOSTNAME_TARGET" ] && [ -x "$WORK_DIR/sb-hostnameify.py" ]; then
-        HOSTNAME_TARGET="$HOSTNAME_TARGET" \
-        SERVER_IP_LITERAL="${SERVER_IP_LITERAL:-}" \
-            "$WORK_DIR/sb-hostnameify.py" 2> >(sed 's/^/[hostnameify] /' >&2) || true
-    elif [ "$DUALSTACK_MIRROR" = "1" ] && [ -x "$WORK_DIR/sb-dualstack.py" ]; then
-        "$WORK_DIR/sb-dualstack.py" 2> >(sed 's/^/[dualstack] /' >&2) || true
-
-        UPPER_ARGS=$(printf '%s ' "$@" | tr '[:lower:]' '[:upper:]')
-        case " $UPPER_ARGS " in
-            *" -N "*)
-                if [ -s "$WORK_DIR/list" ]; then
-                    awk '/### DUALSTACK_BEGIN ###/,/### DUALSTACK_END ###/' "$WORK_DIR/list"
-                fi
-                ;;
-        esac
-    fi
-fi
-
-exit "$RC"
+bash <(wget --no-check-certificate -qO- https://raw.githubusercontent.com/CodeEagle/sing-box/main/sing-box.sh) "$@"
